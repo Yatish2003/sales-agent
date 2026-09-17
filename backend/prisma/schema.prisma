@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Channel {
+  EMAIL
+  WHATSAPP
+  INSTAGRAM
+}
+
+enum LeadStatus {
+  NEW
+  NEEDS_MORE_INFO
+  QUALIFIED
+  NOT_QUALIFIED
+  BOOKED
+  HUMAN_TAKEOVER
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum BookingStatus {
+  OFFERED
+  CONFIRMED
+  FAILED
+  SUPERSEDED
+}
+
+model Lead {
+  id                    String     @id @default(cuid())
+  channel               Channel
+  externalContactId     String
+  displayName           String?
+  status                LeadStatus @default(NEW)
+  assignedRepId         String?
+  qualificationEvidence Json?
+  extractedService      String?
+  extractedBudget       String?
+  extractedTimeline     String?
+  lastFallback          String?
+  humanTakeover         Boolean    @default(false)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  messages              Message[]
+  bookings              CalendarBooking[]
+  actionLogs            ActionLogEntry[]
+
+  @@unique([channel, externalContactId])
+}
+
+model Message {
+  id                 String            @id @default(cuid())
+  leadId             String
+  lead               Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  direction          MessageDirection
+  channel            Channel
+  content            String
+  externalMessageSid String?           @unique
+  createdAt          DateTime          @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model CalendarBooking {
+  id             String         @id @default(cuid())
+  leadId         String
+  lead           Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  slotStart      DateTime
+  slotEnd        DateTime
+  googleEventId  String?
+  status         BookingStatus  @default(OFFERED)
+  idempotencyKey String         @unique
+  createdAt      DateTime       @default(now())
+}
+
+model ActionLogEntry {
+  id        String   @id @default(cuid())
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  runId     String?
+  actor     String
+  action    String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([runId, createdAt])
+}
+
+model AgentRun {
+  id               String          @id @default(cuid())
+  runId            String          @unique
+  sessionId        String
+  transcriptSource String
+  status           String
+  simulateFailure  String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  contexts         AgentContext[]
+  outputs          AgentOutput[]
+  handoffs         HandoffMessage[]
+}
+
+model AgentContext {
+  id              String   @id @default(cuid())
+  runId           String
+  run             AgentRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  version         Int
+  sourceFactsJson Json
+  createdAt       DateTime @default(now())
+
+  @@unique([runId, version])
+}
+
+model AgentOutput {
+  id             String   @id @default(cuid())
+  runId          String
+  run            AgentRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  agentName      String
+  contextVersion Int
+  inputJson      Json
+  outputJson     Json
+  status         String
+  attemptNumber  Int
+  createdAt      DateTime @default(now())
+
+  @@index([runId, agentName, contextVersion])
+}
+
+model HandoffMessage {
+  id               String   @id @default(cuid())
+  runId            String
+  run              AgentRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  fromAgent        String
+  toAgent          String
+  payloadJson      Json
+  validationStatus String
+  contextVersion   Int
+  createdAt        DateTime @default(now())
+}
