@@ -1,12 +1,13 @@
 import { Router } from "express";
-import { confirmBooking, listCandidateSlots } from "../lib/calendar.js";
+import { bookSlot, getAvailableSlots } from "../lib/calendar.js";
 import { prisma } from "../prisma.js";
 
 export const calendarRouter = Router();
 
 calendarRouter.get("/slots", async (req, res) => {
   const repId = String(req.query.repId ?? "priya-shah");
-  const slots = await listCandidateSlots(repId);
+  const days = Number(req.query.days ?? 10);
+  const slots = await getAvailableSlots(repId, Number.isFinite(days) ? days : 10);
   res.json({ slots });
 });
 
@@ -22,11 +23,11 @@ calendarRouter.post("/book", async (req, res) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  const result = await confirmBooking({
+  const result = await bookSlot(
     leadId,
-    slotStart: new Date(slotStart),
-    slotEnd: new Date(slotEnd),
-    repId: repId || lead.assignedRepId || "priya-shah",
-  });
+    repId || lead.assignedRepId || "priya-shah",
+    slotStart,
+    slotEnd,
+  );
   res.json(result);
 });

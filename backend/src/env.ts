@@ -26,8 +26,11 @@ export const env = {
   instagramAppSecret: process.env.INSTAGRAM_APP_SECRET ?? "",
   googleCalendarClientEmail: process.env.GOOGLE_CALENDAR_CLIENT_EMAIL ?? "",
   googleCalendarPrivateKey: (process.env.GOOGLE_CALENDAR_PRIVATE_KEY ?? "").replace(/\\n/g, "\n"),
-  googleCalendarPriyaId: process.env.GOOGLE_CALENDAR_PRIYA_ID ?? "",
-  googleCalendarMarcusId: process.env.GOOGLE_CALENDAR_MARCUS_ID ?? "",
+  googleCalendarId:
+    process.env.GOOGLE_CALENDAR_ID ??
+    process.env.GOOGLE_CALENDAR_PRIYA_ID ??
+    process.env.GOOGLE_CALENDAR_MARCUS_ID ??
+    "",
 };
 
 export function assertServerEnv() {

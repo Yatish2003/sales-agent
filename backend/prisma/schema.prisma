@@ -31,6 +31,7 @@ enum BookingStatus {
   OFFERED
   CONFIRMED
   FAILED
+  SLOT_TAKEN
   SUPERSEDED
 }
 

@@ -6,7 +6,15 @@ import { policySystemPrompt } from "./policy/businessPolicy.js";
 import { applyPolicyGuards } from "./policy/policyGuards.js";
 import { conversationLlmOutputSchema, type ConversationLlmOutput } from "./schemas/sales.js";
 import { routeLead } from "./routing.js";
-import { nextAvailable } from "./calendar.js";
+import {
+  bookSlot,
+  formatSlotOffer,
+  getAvailableSlots,
+  loadOfferedSlots,
+  nextAvailable,
+  parseSlotChoice,
+  persistOfferedSlots,
+} from "./calendar.js";
 import { sendEmail } from "./channels/email.js";
 import { sendWhatsapp } from "./channels/whatsapp.js";
 import { sendInstagram } from "./channels/instagram.js";
@@ -113,6 +121,43 @@ export async function continueConversation(leadId: string) {
   }
 
   const lastInbound = [...lead.messages].reverse().find((m) => m.direction === "INBOUND");
+
+  if (
+    lastInbound &&
+    lead.assignedRepId &&
+    (lead.status === "QUALIFIED" || lead.status === "BOOKED")
+  ) {
+    const offered = await loadOfferedSlots(leadId);
+    const pick = parseSlotChoice(lastInbound.content, offered);
+    if (pick) {
+      const booked = await bookSlot(leadId, lead.assignedRepId, pick.start, pick.end);
+      let reply: string;
+      if (booked.ok && booked.outcome === "booked") {
+        reply = `You’re booked. I’ll see you at ${pick.start}.`;
+      } else if (booked.ok && booked.outcome === "idempotent") {
+        reply = `That time is already confirmed — you’re all set for ${pick.start}.`;
+      } else if (!booked.ok && booked.outcome === "slot_taken") {
+        await persistOfferedSlots(leadId, booked.alternatives);
+        reply = `That slot was just taken. ${formatSlotOffer(lead.assignedRepId, booked.alternatives)}`;
+      } else {
+        reply = "Booking failed, please try again.";
+      }
+      await prisma.message.create({
+        data: {
+          leadId,
+          direction: "OUTBOUND",
+          channel: lead.channel,
+          content: reply,
+        },
+      });
+      await sendOutbound(lead.channel, lead.externalContactId, reply, leadId);
+      return prisma.lead.findUniqueOrThrow({
+        where: { id: leadId },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
+      });
+    }
+  }
+
   const history = lead.messages.map((m) => `${m.direction}: ${m.content}`).join("\n");
 
   let result: ConversationLlmOutput;
@@ -189,16 +234,30 @@ export async function continueConversation(leadId: string) {
     },
   });
 
-  if (result.reply) {
+  let outbound = result.reply;
+  if (status === "QUALIFIED" && assignedRepId) {
+    const slots = await getAvailableSlots(assignedRepId, 10);
+    await persistOfferedSlots(leadId, slots);
+    await logAction({
+      leadId,
+      actor: "calendar",
+      action: "slots_offered",
+      detail: { repId: assignedRepId, slots },
+    });
+    const offer = formatSlotOffer(assignedRepId, slots);
+    outbound = outbound ? `${outbound}\n\n${offer}` : offer;
+  }
+
+  if (outbound) {
     await prisma.message.create({
       data: {
         leadId,
         direction: "OUTBOUND",
         channel: lead.channel,
-        content: result.reply,
+        content: outbound,
       },
     });
-    await sendOutbound(lead.channel, lead.externalContactId, result.reply, leadId);
+    await sendOutbound(lead.channel, lead.externalContactId, outbound, leadId);
   }
 
   return prisma.lead.findUniqueOrThrow({

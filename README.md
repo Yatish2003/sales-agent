@@ -75,7 +75,7 @@ The API **will not start** without `DATABASE_URL`, `AWS_REGION`, `BEDROCK_MODEL_
 | `TWILIO_WEBHOOK_URL` | Full public URL Twilio POSTs to (must match Console exactly) |
 | `EMAIL_WEBHOOK_SECRET` / `EMAIL_FROM` | Inbound email |
 | `INSTAGRAM_*` | Meta Messaging (optional; blocked without review) |
-| `GOOGLE_CALENDAR_*` | Service account + calendar IDs; without them, busy/book is mocked and logged as mock |
+| `GOOGLE_CALENDAR_CLIENT_EMAIL`, `GOOGLE_CALENDAR_PRIVATE_KEY`, `GOOGLE_CALENDAR_ID` | Service account shared on the calendar. Without them, no slots are offered and booking is never marked confirmed. |
 
 ## Tests
 
