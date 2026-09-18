@@ -236,12 +236,12 @@ export async function continueConversation(leadId: string) {
 
   let outbound = result.reply;
   if (status === "QUALIFIED" && assignedRepId) {
-    const slots = await getAvailableSlots(assignedRepId, 10);
+    const slots = await getAvailableSlots(assignedRepId, 10, leadId);
     await persistOfferedSlots(leadId, slots);
     await logAction({
       leadId,
       actor: "calendar",
-      action: "slots_offered",
+      action: slots.length ? "slots_offered" : "slots_unavailable",
       detail: { repId: assignedRepId, slots },
     });
     const offer = formatSlotOffer(assignedRepId, slots);

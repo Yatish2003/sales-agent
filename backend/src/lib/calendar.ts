@@ -174,7 +174,11 @@ function toDisplay(slots: { start: Date; end: Date }[], timeZone: string): Displ
   }));
 }
 
-export async function getAvailableSlots(repId: string, timeframeInDays = 10): Promise<DisplaySlot[]> {
+export async function getAvailableSlots(
+  repId: string,
+  timeframeInDays = 10,
+  leadId?: string,
+): Promise<DisplaySlot[]> {
   const rep = SALES_REPS.find((r) => r.id === repId);
   if (!rep) return [];
   const from = new Date();
@@ -184,9 +188,17 @@ export async function getAvailableSlots(repId: string, timeframeInDays = 10): Pr
   const cal = calendarClient();
   if (!cal) {
     await logAction({
+      leadId,
       actor: "calendar",
       action: "calendar_not_configured",
-      detail: { repId },
+      detail: {
+        repId,
+        missing: [
+          !env.googleCalendarClientEmail && "GOOGLE_CALENDAR_CLIENT_EMAIL",
+          !env.googleCalendarPrivateKey && "GOOGLE_CALENDAR_PRIVATE_KEY",
+          !env.googleCalendarId && "GOOGLE_CALENDAR_ID",
+        ].filter(Boolean),
+      },
     });
     return [];
   }
@@ -196,9 +208,10 @@ export async function getAvailableSlots(repId: string, timeframeInDays = 10): Pr
     busy = await queryBusy(cal, from, windowEnd);
   } catch (err) {
     await logAction({
+      leadId,
       actor: "calendar",
       action: "freebusy_failed",
-      detail: { repId, error: String(err) },
+      detail: { repId, calendarId: env.googleCalendarId, error: String(err) },
     });
     return [];
   }
@@ -363,7 +376,7 @@ export async function bookSlot(
       action: "slot_taken",
       detail: { slotStart: start.toISOString() },
     });
-    const alternatives = await getAvailableSlots(repId, 10);
+    const alternatives = await getAvailableSlots(repId, 10, leadId);
     return { ok: false, outcome: "slot_taken", alternatives };
   }
 
