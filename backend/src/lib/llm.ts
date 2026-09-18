@@ -122,7 +122,29 @@ function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = (fenced?.[1] ?? text).trim();
   const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("No JSON object in LLM response");
+  if (start === -1) throw new Error("No JSON object in LLM response");
+  const end = findObjectEnd(raw, start);
+  if (end === -1) throw new Error("No JSON object in LLM response");
   return JSON.parse(raw.slice(start, end + 1));
+}
+
+// Models sometimes emit prose or a second object after the payload, so take the
+// first balanced object rather than everything up to the last closing brace.
+function findObjectEnd(raw: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return i;
+  }
+  return -1;
 }

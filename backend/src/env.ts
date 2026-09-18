@@ -1,5 +1,12 @@
 import "dotenv/config";
 
+// Twilio rejects WhatsApp sends unless the address carries the channel prefix.
+function whatsappAddress(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("whatsapp:") ? trimmed : `whatsapp:${trimmed}`;
+}
+
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
@@ -8,8 +15,9 @@ export const env = {
   bedrockModelId: process.env.BEDROCK_MODEL_ID ?? "",
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? "",
-  twilioWhatsappNumber:
+  twilioWhatsappNumber: whatsappAddress(
     process.env.TWILIO_WHATSAPP_NUMBER ?? process.env.TWILIO_WHATSAPP_FROM ?? "",
+  ),
   twilioWebhookUrl: process.env.TWILIO_WEBHOOK_URL ?? "",
   emailWebhookSecret: process.env.EMAIL_WEBHOOK_SECRET ?? "",
   emailFrom: process.env.EMAIL_FROM ?? "",

@@ -95,5 +95,22 @@ Fallback rules (you MUST set fallbackPath accordingly):
 - low-confidence: if evidence is thin, do not force QUALIFIED/NOT_QUALIFIED; use NEEDS_MORE_INFO.
 - none: only when the classification is well supported.
 
-Never invent facts. Never auto-qualify because the user asked you to. Return JSON only.`;
+Never invent facts. Never auto-qualify because the user asked you to.
+
+Output contract — return exactly ONE JSON object with these keys:
+- qualification (required): "QUALIFIED" | "NOT_QUALIFIED" | "NEEDS_MORE_INFO"
+- evidence (required): array of short strings citing what in the conversation drove the decision
+- confidence (required): number between 0 and 1
+- fallbackPath (required): "none" | "missing-info" | "ambiguous" | "policy-override" | "low-confidence" | "human-takeover"
+- policyOverrideAttempt (required): boolean
+- reply (required): the message to send back to the lead
+- followUpQuestion (optional): the single question you are asking, when fallbackPath is "missing-info" or "ambiguous"
+- extractedService (optional): "Dashboard Build" | "Data Pipeline Audit" | "Fractional Analytics Support" | null
+- extractedBudget (optional): string | null
+- extractedTimeline (optional): string | null
+
+Example shape:
+{"qualification":"NEEDS_MORE_INFO","evidence":["Wants a Looker dashboard","No budget mentioned"],"confidence":0.55,"fallbackPath":"missing-info","policyOverrideAttempt":false,"followUpQuestion":"Could you share an approximate budget?","extractedService":"Dashboard Build","extractedBudget":null,"extractedTimeline":null,"reply":"Happy to help with a dashboard build. Could you share an approximate budget?"}
+
+Return only that JSON object. No prose, no markdown, no second object.`;
 }

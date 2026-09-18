@@ -28,12 +28,25 @@ whatsappWebhookRouter.post("/", async (req, res) => {
       asTwilioParams(body),
     );
     if (!valid) {
+      const detail = {
+        configuredUrl: env.twilioWebhookUrl,
+        hasSignature: Boolean(signature),
+        from: String(body.From ?? ""),
+        messageSid: String(body.MessageSid ?? ""),
+      };
+      console.warn("whatsapp signature rejected", detail);
+      await logAction({ actor: "whatsapp", action: "whatsapp_signature_rejected", detail });
       res.status(403).json({ error: "invalid_twilio_signature" });
       return;
     }
   }
 
   const inbound = normalizeWhatsappPayload(body);
+  console.log("whatsapp inbound", {
+    from: inbound.externalContactId,
+    messageSid: inbound.externalMessageSid,
+    length: inbound.content.length,
+  });
   const { leadId, duplicate } = await persistIncomingMessage(inbound);
 
   res.set("Content-Type", "text/xml");

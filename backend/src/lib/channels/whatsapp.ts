@@ -36,7 +36,7 @@ export async function sendWhatsappMessage(to: string, body: string, leadId?: str
     const client = Twilio(env.twilioAccountSid, env.twilioAuthToken);
     await client.messages.create({
       from: env.twilioWhatsappNumber,
-      to,
+      to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
       body,
     });
   } catch (err) {
