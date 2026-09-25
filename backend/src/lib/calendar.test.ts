@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decideBooking, makeIdempotencyKey, parseSlotChoice, workingSlots } from "./calendar.js";
+import {
+  decideBooking,
+  formatSlotLabel,
+  makeIdempotencyKey,
+  parseSlotChoice,
+  workingSlots,
+} from "./calendar.js";
 
 describe("idempotent booking", () => {
   it("hashes leadId + slotStart stably", () => {
@@ -50,5 +56,17 @@ describe("parseSlotChoice", () => {
 
   it("ignores messages that are not a slot pick", () => {
     expect(parseSlotChoice("can we talk next month?", slots)).toBeNull();
+  });
+
+  it("maps a pasted offer label to the correct slot", () => {
+    const offer = [
+      { start: "2026-09-25T15:00:00+05:30", end: "2026-09-25T15:30:00+05:30" },
+      { start: "2026-09-25T15:30:00+05:30", end: "2026-09-25T16:00:00+05:30" },
+      { start: "2026-09-25T16:00:00+05:30", end: "2026-09-25T16:30:00+05:30" },
+    ];
+    expect(parseSlotChoice("3", offer, "priya-shah")).toEqual(offer[2]);
+    const label = formatSlotLabel("priya-shah", offer[2]!);
+    expect(parseSlotChoice(label, offer, "priya-shah")).toEqual(offer[2]);
+    expect(parseSlotChoice(`Fri 25 Sept, 16:00-16:30`, offer, "priya-shah")).toEqual(offer[2]);
   });
 });

@@ -8,6 +8,8 @@ import { conversationLlmOutputSchema, type ConversationLlmOutput } from "./schem
 import { routeLead } from "./routing.js";
 import {
   bookSlot,
+  formatBookingConfirm,
+  formatSlotLabel,
   formatSlotOffer,
   getAvailableSlots,
   loadOfferedSlots,
@@ -128,14 +130,14 @@ export async function continueConversation(leadId: string) {
     (lead.status === "QUALIFIED" || lead.status === "BOOKED")
   ) {
     const offered = await loadOfferedSlots(leadId);
-    const pick = parseSlotChoice(lastInbound.content, offered);
+    const pick = parseSlotChoice(lastInbound.content, offered, lead.assignedRepId);
     if (pick) {
       const booked = await bookSlot(leadId, lead.assignedRepId, pick.start, pick.end);
       let reply: string;
       if (booked.ok && booked.outcome === "booked") {
-        reply = `You’re booked. I’ll see you at ${pick.start}.`;
+        reply = formatBookingConfirm(lead.assignedRepId, pick);
       } else if (booked.ok && booked.outcome === "idempotent") {
-        reply = `That time is already confirmed — you’re all set for ${pick.start}.`;
+        reply = `That time is already confirmed — you’re all set for ${formatSlotLabel(lead.assignedRepId, pick)}.`;
       } else if (!booked.ok && booked.outcome === "slot_taken") {
         await persistOfferedSlots(leadId, booked.alternatives);
         reply = `That slot was just taken. ${formatSlotOffer(lead.assignedRepId, booked.alternatives)}`;
