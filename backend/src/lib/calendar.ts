@@ -235,50 +235,76 @@ async function slotIsFree(slotStart: Date, slotEnd: Date): Promise<boolean> {
   return !busy.some((b) => overlaps({ start: slotStart, end: slotEnd }, b));
 }
 
+/** Same date/time line as in formatSlotOffer (without the leading number). */
+export function formatSlotLabel(repId: string, slot: DisplaySlot): string {
+  const rep = SALES_REPS.find((r) => r.id === repId);
+  const start = new Date(slot.start);
+  const end = new Date(slot.end);
+  const label = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: rep?.timezone,
+  }).format(start);
+  const endLabel = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: rep?.timezone,
+  }).format(end);
+  return `${label}–${endLabel}`;
+}
+
 export function formatSlotOffer(repId: string, slots: DisplaySlot[]): string {
   const rep = SALES_REPS.find((r) => r.id === repId);
   const who = rep ? `${rep.name} (${rep.timezone})` : repId;
   if (slots.length === 0) {
     return `I couldn’t load live calendar times for ${who} right now. Reply and I’ll try again.`;
   }
-  const lines = slots.map((s, i) => {
-    const start = new Date(s.start);
-    const end = new Date(s.end);
-    const label = new Intl.DateTimeFormat("en-GB", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: rep?.timezone,
-    }).format(start);
-    const endLabel = new Intl.DateTimeFormat("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: rep?.timezone,
-    }).format(end);
-    return `${i + 1}. ${label}–${endLabel}`;
-  });
+  const lines = slots.map((s, i) => `${i + 1}. ${formatSlotLabel(repId, s)}`);
   return `Here are ${slots.length} intro-call times with ${who}. Reply with a number (1–${slots.length}) to book:\n${lines.join("\n")}`;
 }
 
-export function parseSlotChoice(content: string, slots: DisplaySlot[]): DisplaySlot | null {
+export function formatBookingConfirm(repId: string, slot: DisplaySlot): string {
+  const rep = SALES_REPS.find((r) => r.id === repId);
+  const who = rep?.name ?? repId;
+  return `You’re booked with ${who} on ${formatSlotLabel(repId, slot)}.`;
+}
+
+export function parseSlotChoice(content: string, slots: DisplaySlot[], repId?: string): DisplaySlot | null {
   if (!slots.length) return null;
   const trimmed = content.trim();
-  const numbered = trimmed.match(/^(?:slot\s*)?#?\s*([1-5])(?:\b|[.)])/i);
+  const numbered = trimmed.match(/^(?:slot\s*)?#?\s*([1-9])(?:\b|[.)])/i);
   if (numbered) {
     const idx = Number(numbered[1]) - 1;
     return slots[idx] ?? null;
   }
-  const normalized = trimmed.replace(/\s+/g, " ");
+  const normalized = trimmed.replace(/\s+/g, " ").replace(/–/g, "-");
+  const loose = (s: string) => s.replace(/\s+/g, " ").replace(/–/g, "-").replace(/,/g, "").toLowerCase();
+  const looseIn = loose(normalized);
+  if (repId) {
+    const byLabel = slots.find((s) => {
+      const label = formatSlotLabel(repId, s);
+      const looseLabel = loose(label);
+      return looseIn.includes(looseLabel) || looseLabel.includes(looseIn);
+    });
+    if (byLabel) return byLabel;
+  }
   return (
-    slots.find((s) => normalized.includes(s.start) || normalized.includes(new Date(s.start).toISOString())) ?? null
+    slots.find((s) => normalized.includes(s.start) || normalized.includes(new Date(s.start).toISOString())) ??
+    null
   );
 }
 
 export async function persistOfferedSlots(leadId: string, slots: DisplaySlot[]) {
+  if (slots.length === 0) return;
+  await prisma.calendarBooking.updateMany({
+    where: { leadId, status: "OFFERED" },
+    data: { status: "SUPERSEDED" },
+  });
   for (const slot of slots) {
     const start = new Date(slot.start);
     const end = new Date(slot.end);
@@ -292,22 +318,20 @@ export async function persistOfferedSlots(leadId: string, slots: DisplaySlot[]) 
         status: "OFFERED",
         idempotencyKey,
       },
-      update: {},
+      update: { status: "OFFERED", slotEnd: end },
     });
   }
 }
 
 export async function loadOfferedSlots(leadId: string): Promise<DisplaySlot[]> {
-  const rows = await prisma.calendarBooking.findMany({
-    where: { leadId, status: { in: ["OFFERED", "CONFIRMED"] } },
-    orderBy: { slotStart: "asc" },
-  });
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   const rep = SALES_REPS.find((r) => r.id === lead?.assignedRepId);
   const tz = rep?.timezone ?? "UTC";
-  const offered = rows.filter((r) => r.status === "OFFERED");
-  const source = offered.length ? offered : rows;
-  return source.map((r) => ({
+  const rows = await prisma.calendarBooking.findMany({
+    where: { leadId, status: "OFFERED" },
+    orderBy: { slotStart: "asc" },
+  });
+  return rows.map((r) => ({
     start: toZonedIso(r.slotStart, tz),
     end: toZonedIso(r.slotEnd, tz),
   }));
