@@ -274,6 +274,16 @@ export function formatBookingConfirm(repId: string, slot: DisplaySlot): string {
   return `You’re booked with ${who} on ${formatSlotLabel(repId, slot)}.`;
 }
 
+export function formatCalendarEventTitle(lead: {
+  displayName: string | null;
+  extractedService: string | null;
+}): string {
+  const name = lead.displayName?.trim() || "Prospect";
+  const service = lead.extractedService?.trim();
+  if (service) return `Northlight intro — ${name} (${service})`;
+  return `Northlight intro — ${name}`;
+}
+
 export function parseSlotChoice(content: string, slots: DisplaySlot[], repId?: string): DisplaySlot | null {
   if (!slots.length) return null;
   const trimmed = content.trim();
@@ -404,12 +414,20 @@ export async function bookSlot(
     return { ok: false, outcome: "slot_taken", alternatives };
   }
 
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { displayName: true, extractedService: true },
+  });
+  const rep = SALES_REPS.find((r) => r.id === repId);
+  const eventTitle = formatCalendarEventTitle(lead ?? { displayName: null, extractedService: null });
+  const eventDescription = [rep ? `With ${rep.name}` : repId, `Lead ID: ${leadId}`].join("\n");
+
   try {
     const event = await cal.events.insert({
       calendarId: env.googleCalendarId,
       requestBody: {
-        summary: `Northlight intro — lead ${leadId}`,
-        description: `Intro call with ${repId}`,
+        summary: eventTitle,
+        description: eventDescription,
         start: { dateTime: start.toISOString() },
         end: { dateTime: end.toISOString() },
       },

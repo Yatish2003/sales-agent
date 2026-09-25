@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decideBooking,
+  formatCalendarEventTitle,
   formatSlotLabel,
   makeIdempotencyKey,
   parseSlotChoice,
@@ -40,6 +41,20 @@ describe("workingSlots", () => {
     expect(firstMonday).toBeTruthy();
     expect(firstMonday?.end.toISOString()).toBe("2026-09-21T05:00:00.000Z");
     expect(slots.every((s) => s.end.getTime() - s.start.getTime() === 30 * 60_000)).toBe(true);
+  });
+});
+
+describe("formatCalendarEventTitle", () => {
+  it("uses display name and service", () => {
+    expect(
+      formatCalendarEventTitle({ displayName: "Yatish", extractedService: "Dashboard Build" }),
+    ).toBe("Northlight intro — Yatish (Dashboard Build)");
+  });
+
+  it("falls back when service is missing", () => {
+    expect(formatCalendarEventTitle({ displayName: "Yatish", extractedService: null })).toBe(
+      "Northlight intro — Yatish",
+    );
   });
 });
 
